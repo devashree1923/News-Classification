@@ -25,7 +25,7 @@ import warnings
 import pickle
 warnings.filterwarnings("ignore")
 # Vectorizer
-news_vectorizer = open("c:\\Users\\dell\\OneDrive\\Desktop\\News Classification\\models\\Vectorizer", "rb")
+news_vectorizer = open("models\\Vectorizer", "rb")
 news_cv = joblib.load(news_vectorizer)
 
 #Loading Model
@@ -187,9 +187,9 @@ def tokenize_text(text):
             tokens.append(word.lower())
     return tokens
 
-def vec_for_learning(model, tagged_docs):
+def vec_for_learning(model_dbow, tagged_docs):
     sents = tagged_docs.values
-    targets, regressors = zip(*[(doc.tags[0], model.infer_vector(doc.words, steps=20)) for doc in sents])
+    targets, regressors = zip(*[(doc.tags[0], model_dbow.infer_vector(doc.words, steps=20)) for doc in sents])
     return targets, regressors
 
 data = get_dataset()
@@ -228,11 +228,10 @@ def main():
         st.info("Natural Language Processing")
         df = pd.read_csv("data/BBC_News_Train_Processed.csv")
         train, test = train_test_split(df, test_size = 0.2, random_state=42)
-        train_tagged = train.apply(lambda r: TaggedDocument(words=tokenize_text(r['Text']), tags=[r.Category]), axis=1)
+        print(test)
         test_tagged = test.apply(lambda r: TaggedDocument(words=tokenize_text(r['Text']), tags=[r.Category]), axis=1)
-        model_dbow = pickle.load(open('nlp_model_dbow.sav', 'rb'))
-        model = pickle.load(open('nlp_model.sav', 'rb'))
-        Y_train, X_train = vec_for_learning(model_dbow, train_tagged)
+        model_dbow = pickle.load(open('models\\nlp_model_dbow.sav', 'rb'))
+        model = pickle.load(open('models\\nlp_model.sav', 'rb'))
         Y_test, X_test = vec_for_learning(model_dbow, test_tagged)
         Y_pred = model.predict(X_test)
         compute(Y_pred, Y_test)
