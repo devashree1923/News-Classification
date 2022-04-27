@@ -1,5 +1,8 @@
+from sklearn.feature_selection import f_oneway
 import streamlit as st
+import pandas as pd
 import joblib,os
+import seaborn as sns
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
@@ -10,7 +13,14 @@ from sklearn.preprocessing import MinMaxScaler, LabelEncoder, StandardScaler
 from sklearn.metrics import precision_recall_fscore_support as score, mean_squared_error
 from sklearn.metrics import confusion_matrix,accuracy_score
 from sklearn.decomposition import PCA
-
+from nltk.tokenize import word_tokenize 
+from nltk.corpus import stopwords
+from sklearn import preprocessing 
+from sklearn.feature_extraction.text import TfidfVectorizer
+import matplotlib.pyplot as plt
+import re
+import warnings
+warnings.filterwarnings("ignore")
 # Vectorizer
 news_vectorizer = open("c:\\Users\\dell\\OneDrive\\Desktop\\News Classification\\models\\Vectorizer", "rb")
 news_cv = joblib.load(news_vectorizer)
@@ -60,6 +70,9 @@ def add_parameter_ui(clf_name):
         params["C"] = C
         params["SS"] = SS
 
+    RS=st.sidebar.slider("Random State",0,100)
+    params["RS"] = RS
+    return params
 
 
 def get_classifier(clf_name,params):
@@ -80,6 +93,91 @@ def get_classifier(clf_name,params):
         clf = MultinomialNB(class_prior=params["cp"],fit_prior=params["fp"])
 
     return clf
+def process_text(text):
+    text = text.lower().replace('\n',' ').replace('\r','').strip()
+    text = re.sub(' +', ' ', text)
+    text = re.sub(r'[^\w\s]','',text)
+    
+    
+    stop_words = set(stopwords.words('english')) 
+    word_tokens = word_tokenize(text) 
+    filtered_sentence = [w for w in word_tokens if not w in stop_words] 
+    filtered_sentence = [] 
+    for w in word_tokens: 
+        if w not in stop_words: 
+            filtered_sentence.append(w) 
+    
+    text = " ".join(filtered_sentence)
+    return text
+
+def get_dataset():
+    data = pd.read_csv("data\BBC News Train.csv")
+    data['News_length'] = data['Text'].str.len()
+    data['Text_parsed'] = data['Text'].apply(process_text)
+    label_encoder = preprocessing.LabelEncoder() 
+    data['Category_target']= label_encoder.fit_transform(data['Category']) 
+    return data
+
+
+#Plot Output
+def compute(Y_pred,Y_test):
+    # c1, c2 = st.beta_columns((4,3))
+    #Confusion Matrix
+    st.set_option('deprecation.showPyplotGlobalUse', False)
+    cm=confusion_matrix(Y_test,Y_pred)
+    class_label = ["business", "entertainment", "politics", "sport","tech"]
+    df_cm = pd.DataFrame(cm, index=class_label,columns=class_label)
+    plt.figure(figsize=(12, 7.5))
+    sns.heatmap(df_cm,annot=True,cmap='Pastel1',linewidths=2,fmt='d')
+    plt.title("Confusion Matrix",fontsize=15)
+    plt.xlabel("Predicted")
+    plt.ylabel("True")
+    st.pyplot()
+    #Calculate Metrics
+    acc=accuracy_score(Y_test,Y_pred)
+    mse=mean_squared_error(Y_test,Y_pred)
+    precision, recall, fscore, train_support = score(Y_test, Y_pred, pos_label=1)
+    st.subheader("Metrics of the model: ")
+    st.text('Precision: {} \nRecall: {} \nF1-Score: {} \nAccuracy: {} %\nMean Squared Error: {}'.format(
+        precision,recall,fscore,acc*100, mse))
+
+
+
+#Build Model
+def model(clf):
+    X_train,X_test,Y_train,Y_test=train_test_split(data['Text_parsed'], 
+                                                    data['Category_target'],test_size=0.2,random_state=65)
+    ngram_range = (1,2)
+    min_df = 10
+    max_df = 1.
+    max_features = 300
+    tfidf = TfidfVectorizer(encoding='utf-8',
+                        ngram_range=ngram_range,
+                        stop_words=None,
+                        lowercase=False,
+                        max_df=max_df,
+                        min_df=min_df,
+                        max_features=max_features,
+                        norm='l2',
+                        sublinear_tf=True)
+                        
+    features_train = tfidf.fit_transform(X_train).toarray()
+    labels_train = Y_train
+    
+
+    features_test = tfidf.transform(X_test).toarray()
+    labels_test = Y_test
+    
+
+    clf.fit(features_train, labels_train)
+    Y_pred = clf.predict(features_test)
+    acc=accuracy_score(labels_test,Y_pred)
+    return clf, Y_test, Y_pred
+
+
+data = get_dataset()
+X = data['Text_parsed']
+Y = data['Category_target']
 
 def main():
     st.title("News Classification ML App")
@@ -91,6 +189,7 @@ def main():
     if choice=="About":
         st.info("About Us")
     if choice=="Prediction":
+        
         st.info("Prediction with ML")
         news_text = st.text_area("Enter Text", "Type Here")
         all_ml_models = ["Logistic Regression", "Naive Bayes", "Decision Tree", "SVM", "KNN"]
@@ -101,10 +200,13 @@ def main():
             st.text("Original test ::\n{}".format(news_text))
             vect_text = news_cv.transform([news_text]).toarray()
             clf = get_classifier(model_choice,params)
-            predictor = load_prediction_model(clf)
+            predictor, Y_pred,Y_test = model(clf)
             prediction = predictor.predict(vect_text)
             result = get_category(prediction, prediction_labels)
             st.success(result)
+            st.markdown("<hr>",unsafe_allow_html=True)
+            st.subheader(f"Classifier Used: {model_choice}")
+            compute(Y_pred,Y_test)
     if choice=="NLP":
         st.info("Natural Language Processing")
         
