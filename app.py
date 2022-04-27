@@ -13,13 +13,16 @@ from sklearn.preprocessing import MinMaxScaler, LabelEncoder, StandardScaler
 from sklearn.metrics import precision_recall_fscore_support as score, mean_squared_error
 from sklearn.metrics import confusion_matrix,accuracy_score
 from sklearn.decomposition import PCA
-from nltk.tokenize import word_tokenize 
+from nltk.tokenize import word_tokenize
+from gensim.models.doc2vec import TaggedDocument
+import nltk 
 from nltk.corpus import stopwords
 from sklearn import preprocessing 
 from sklearn.feature_extraction.text import TfidfVectorizer
 import matplotlib.pyplot as plt
 import re
 import warnings
+import pickle
 warnings.filterwarnings("ignore")
 # Vectorizer
 news_vectorizer = open("c:\\Users\\dell\\OneDrive\\Desktop\\News Classification\\models\\Vectorizer", "rb")
@@ -174,6 +177,20 @@ def model(clf):
     acc=accuracy_score(labels_test,Y_pred)
     return clf, Y_test, Y_pred
 
+#tokenize for nlp
+def tokenize_text(text):
+    tokens = []
+    for sent in nltk.sent_tokenize(text):
+        for word in nltk.word_tokenize(sent):
+            if len(word) < 2:
+                continue
+            tokens.append(word.lower())
+    return tokens
+
+def vec_for_learning(model, tagged_docs):
+    sents = tagged_docs.values
+    targets, regressors = zip(*[(doc.tags[0], model.infer_vector(doc.words, steps=20)) for doc in sents])
+    return targets, regressors
 
 data = get_dataset()
 X = data['Text_parsed']
@@ -209,6 +226,18 @@ def main():
             compute(Y_pred,Y_test)
     if choice=="NLP":
         st.info("Natural Language Processing")
+        df = pd.read_csv("data/BBC_News_Train_Processed.csv")
+        train, test = train_test_split(df, test_size = 0.2, random_state=42)
+        train_tagged = train.apply(lambda r: TaggedDocument(words=tokenize_text(r['Text']), tags=[r.Category]), axis=1)
+        test_tagged = test.apply(lambda r: TaggedDocument(words=tokenize_text(r['Text']), tags=[r.Category]), axis=1)
+        model_dbow = pickle.load(open('nlp_model_dbow.sav', 'rb'))
+        model = pickle.load(open('nlp_model.sav', 'rb'))
+        Y_train, X_train = vec_for_learning(model_dbow, train_tagged)
+        Y_test, X_test = vec_for_learning(model_dbow, test_tagged)
+        Y_pred = model.predict(X_test)
+        compute(Y_pred, Y_test)
+
+
         
 if __name__ == '__main__':
     main()
