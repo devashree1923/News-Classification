@@ -23,6 +23,7 @@ import matplotlib.pyplot as plt
 import re
 import warnings
 import pickle
+import webbrowser
 warnings.filterwarnings("ignore")
 # Vectorizer
 news_vectorizer = open("models\\Vectorizer", "rb")
@@ -128,7 +129,7 @@ def compute(Y_pred,Y_test):
     #Confusion Matrix
     st.set_option('deprecation.showPyplotGlobalUse', False)
     cm=confusion_matrix(Y_test,Y_pred)
-    class_label = ["business", "entertainment", "politics", "sport","tech"]
+    class_label = ["business", "tech", "politics", "sport","entertainment"]
     df_cm = pd.DataFrame(cm, index=class_label,columns=class_label)
     plt.figure(figsize=(12, 7.5))
     sns.heatmap(df_cm,annot=True,cmap='Pastel1',linewidths=2,fmt='d')
@@ -197,14 +198,28 @@ X = data['Text_parsed']
 Y = data['Category_target']
 
 def main():
-    st.title("News Classification ML App")
-    st.subheader("ML J Component")
-
-    activities = ["About","Prediction","NLP"]
+    activities = ["About","Data", "Prediction","NLP"]
     choice = st.sidebar.selectbox("Choose Activity", activities)
-
+    if choice=="Data":
+        st.title('Data')
+        st.write("The following is the DataFrame of the `BBC News` dataset.")
+        data = pd.read_csv("data\BBC News Train.csv")
+        st.write(data)
     if choice=="About":
-        st.info("About Us")
+        with st.container():
+            st.title("Welcome to News Classification ML App:wave:")
+            st.markdown("![Web Application](https://i.gifer.com/991p.gif)")
+            st.markdown(""" 
+			#### Built with Streamlit
+			## By
+			+ Devashree Pravakar
+			""")
+            st.markdown("""+ Arindam Rao""")
+            st.markdown("""+ Kintali Pardha Sardhi""")
+            url = 'https://github.com/devashree1923/News-Classification'
+            if st.button('Github'):
+                webbrowser.open_new_tab(url)
+
     if choice=="Prediction":
         
         st.info("Prediction with ML")
@@ -226,15 +241,26 @@ def main():
             compute(Y_pred,Y_test)
     if choice=="NLP":
         st.info("Natural Language Processing")
+        news_text = st.text_area("Enter Text", "Type Here")
         df = pd.read_csv("data/BBC_News_Train_Processed.csv")
-        train, test = train_test_split(df, test_size = 0.2, random_state=42)
-        print(test)
-        test_tagged = test.apply(lambda r: TaggedDocument(words=tokenize_text(r['Text']), tags=[r.Category]), axis=1)
-        model_dbow = pickle.load(open('models\\nlp_model_dbow.sav', 'rb'))
-        model = pickle.load(open('models\\nlp_model.sav', 'rb'))
-        Y_test, X_test = vec_for_learning(model_dbow, test_tagged)
-        Y_pred = model.predict(X_test)
-        compute(Y_pred, Y_test)
+        if st.button("Classify"):
+            prediction_labels = {0:'business', 1:'entertainment', 2:'politics', 3:'sport', 4:'tech'}
+            news_text = process_text(news_text)
+            news_text = pd.DataFrame({'Text':[news_text]})
+            train, test = train_test_split(df, test_size = 0.2, random_state=42)
+            news_text = news_text.apply(lambda r: TaggedDocument(words=tokenize_text(r['Text']), tags=[0]), axis=1)
+            test_tagged = test.apply(lambda r: TaggedDocument(words=tokenize_text(r['Text']), tags=[r.Category]), axis=1)
+            model_dbow = pickle.load(open('models\\nlp_model_dbow.sav', 'rb'))
+            model_logistic = pickle.load(open('models\\nlp_model.sav', 'rb'))
+            Y_text, X_text = vec_for_learning(model_dbow, news_text)
+            Y_test, X_test = vec_for_learning(model_dbow, test_tagged)
+            Y_pred = model_logistic.predict(X_test)
+            Y_text = model_logistic.predict(X_text) 
+            result = prediction_labels[Y_text[0]]
+            st.success(result)
+            st.markdown("<hr>",unsafe_allow_html=True)
+            st.subheader("Classifier Used: NLP with logistic regression")
+            compute(Y_pred, Y_test)
 
 
         
