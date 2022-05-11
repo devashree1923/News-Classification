@@ -1,4 +1,3 @@
-from sklearn.feature_selection import f_oneway
 import streamlit as st
 import pandas as pd
 import joblib,os
@@ -9,10 +8,8 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.svm import SVC
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import MinMaxScaler, LabelEncoder, StandardScaler
 from sklearn.metrics import precision_recall_fscore_support as score, mean_squared_error
 from sklearn.metrics import confusion_matrix,accuracy_score
-from sklearn.decomposition import PCA
 from nltk.tokenize import word_tokenize
 from gensim.models.doc2vec import TaggedDocument
 import nltk 
@@ -24,6 +21,7 @@ import re
 import warnings
 import pickle
 import webbrowser
+from wordcloud import WordCloud
 warnings.filterwarnings("ignore")
 # Vectorizer
 news_vectorizer = open("models\\Vectorizer", "rb")
@@ -54,12 +52,6 @@ def add_parameter_ui(clf_name):
         K = st.sidebar.slider("n_neighbors",1,20)
         params["K"] = K
 
-    elif clf_name == "Naive Bayes":
-        cp = st.sidebar.selectbox("class_prior",(True, False))
-        fp = st.sidebar.selectbox("fit_prior",(True, False))
-        params["cp"] = cp
-        params["fp"] = fp
-
     elif clf_name == "SVM":
         C = st.sidebar.slider("Regularization",0.01,10.0,step=0.01)
         kernel = st.sidebar.selectbox("Kernel",("linear", "poly", "rbf", "sigmoid", "precomputed"))
@@ -74,8 +66,6 @@ def add_parameter_ui(clf_name):
         params["C"] = C
         params["SS"] = SS
 
-    RS=st.sidebar.slider("Random State",0,100)
-    params["RS"] = RS
     return params
 
 
@@ -91,10 +81,10 @@ def get_classifier(clf_name,params):
         clf = SVC(kernel=params["kernel"],C=params["C"])
 
     elif clf_name == "Decision Tree":
-        clf = DecisionTreeClassifier(max_depth=params["M"],criterion=params["C"],min_impurity_split=params["SS"])
+        clf = DecisionTreeClassifier(max_depth=params["M"],criterion=params["C"])
 
     elif clf_name == "Naive Bayes":
-        clf = MultinomialNB(class_prior=params["cp"],fit_prior=params["fp"])
+        clf = MultinomialNB()
 
     return clf
 def process_text(text):
@@ -215,7 +205,7 @@ def main():
 			+ Devashree Pravakar
 			""")
             st.markdown("""+ Arindam Rao""")
-            st.markdown("""+ Kintali Pardha Sardhi""")
+            st.markdown("""+ Kintali Pardha Saradhi""")
             url = 'https://github.com/devashree1923/News-Classification'
             if st.button('Github'):
                 webbrowser.open_new_tab(url)
@@ -228,8 +218,10 @@ def main():
         model_choice = st.selectbox("Choose ML Model", all_ml_models)
         prediction_labels = {'business':0, 'tech':1, 'politics':2, 'sport':3, 'entertainment':4}
         params = add_parameter_ui(model_choice)
+        
         if st.button("Classify"):
-            st.text("Original test ::\n{}".format(news_text))
+            st.text("Original text ::\n{}".format(news_text))
+            news_text = process_text(news_text)
             vect_text = news_cv.transform([news_text]).toarray()
             clf = get_classifier(model_choice,params)
             predictor, Y_pred,Y_test = model(clf)
@@ -239,9 +231,18 @@ def main():
             st.markdown("<hr>",unsafe_allow_html=True)
             st.subheader(f"Classifier Used: {model_choice}")
             compute(Y_pred,Y_test)
+            # if st.checkbox("WordCloud"):
+            st.subheader("WordCloud: ")
+            c_text = news_text
+            wordcloud = WordCloud().generate(c_text)
+            plt.imshow(wordcloud, interpolation='bilinear')
+            plt.axis("off")
+            plt.show()
+            st.pyplot()
     if choice=="NLP":
         st.info("Natural Language Processing")
         news_text = st.text_area("Enter Text", "Type Here")
+        c_text = news_text
         df = pd.read_csv("data/BBC_News_Train_Processed.csv")
         if st.button("Classify"):
             prediction_labels = {0:'business', 1:'entertainment', 2:'politics', 3:'sport', 4:'tech'}
@@ -261,7 +262,13 @@ def main():
             st.markdown("<hr>",unsafe_allow_html=True)
             st.subheader("Classifier Used: NLP with logistic regression")
             compute(Y_pred, Y_test)
-
+            st.subheader("WordCloud: ")
+            
+            wordcloud = WordCloud().generate(c_text)
+            plt.imshow(wordcloud, interpolation='bilinear')
+            plt.axis("off")
+            plt.show()
+            st.pyplot()
 
         
 if __name__ == '__main__':
